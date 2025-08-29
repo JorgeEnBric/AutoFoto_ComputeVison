@@ -4,6 +4,7 @@ const app = express();
 const path = require('path');
 const fs = require('fs-extra');
 const multer = require('multer');
+const os = require('os');
 // Cargar variables de entorno desde azure.env
 require('dotenv').config({ path: path.join(__dirname, 'azure.env') });
 // Azure Computer Vision (Visual OCR)
@@ -20,6 +21,18 @@ const cvClient = new ComputerVisionClient(
     AZURE_VISION_ENDPOINT || ''
 );
 const port = 3000;
+// Utilidad para obtener la IP local sin depender de módulos externos
+function getLocalIP() {
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name] || []) {
+            if (net && net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return 'localhost';
+}
 
 // Función para guardar texto extraído
 async function saveExtractedText(text, imageName) {
@@ -130,8 +143,9 @@ app.get('/', (req, res) => {
 });
 
 // Iniciar el servidor
-app.listen(port, require('ip').address(), () => { // Obtén la IP actual del servidor
-    console.log(`Servidor escuchando en http://${require('ip').address()}:${port}`);
+app.listen(port, '0.0.0.0', () => { // Escucha en todas las interfaces
+    const host = getLocalIP();
+    console.log(`Servidor escuchando en http://${host}:${port}`);
     
     // Crear el directorio de galería si no existe
     const galeriaPath = path.join(__dirname, 'Galeria');
