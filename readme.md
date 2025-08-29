@@ -1,6 +1,9 @@
+AutoFoto_ComputeVision es un servidor web en Node JS que toma automaticamente fotos y las guarda en un directorio ubicado en el servidor donde se despliegue [Galeria]
+Cada imagen tomada es analizada con Compute Vision para extraer el texto y guardarlo en [TextosExtraidos.txt]
 
-AutoFoto es un servidor web en Node JS que toma automaticamente fotos y las guarda en un directorio ubicado en el servidor donde se despliegue [Galeria]
-Cada imagen tomada es analizada con Compure Vision para extrar el texto y guardarlo en [TextosExtraidos.txt]
+Funciona SIN https, debe ajustarse en el navegador para que funcione correctamente en chrome:
+
+En chrome://flags/ buscar "Insecure content allowed" y activarla para la Ip del servidor donde está corriendo AutoFoto_ComputeVision
 
 Funciona sin https, debe ajustarse en el navegador para que funcione correctamente en chrome:
 
