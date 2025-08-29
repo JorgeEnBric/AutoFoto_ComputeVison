@@ -1,5 +1,6 @@
 
-AutoFoto es un servidor web que permite subir y mostrar fotos en una galeria.
+AutoFoto es un servidor web en Node JS que toma automaticamente fotos y las guarda en un directorio ubicado en el servidor donde se despliegue [Galeria]
+Cada imagen tomada es analizada con Compure Vision para extrar el texto y guardarlo en [TextosExtraidos.txt]
 
 Funciona sin https, debe ajustarse en el navegador para que funcione correctamente en chrome:
 
@@ -8,14 +9,21 @@ Y buscar "Insecure content allowed" y activarla para la Ip del servidor donde es
 Ejemplo: http://192.168.1.100:3000
 
 Para inicializar el proyecto:
+#####################################
 1. Instalar dependencias: npm install
-2. Iniciar el servidor: npm start
+2. Editar el azure.env con el endpoint de Compute Vision Azure (Gratuito, solo crear la cuenta en Azure y crear el recurso)
+AZURE_VISION_ENDPOINT=https://<Tu-recurso>.cognitiveservices.azure.com/
+AZURE_VISION_KEY=xxxxx
 
-El servidor se iniciará en http://localhost:3000
+3. Iniciar el servidor: npm start o node index.js
+
+El servidor se iniciará en http://192.168.1.100:3000
 
 El directorio de las fotos se encuentra en la carpeta "Galeria"
 
-Para subir una foto:
-1. En el celular, abrir el navegador e ir a 
-http://IPSuministrada:3000
+Consumir la webapp
+#####################################
+1. En el smartphone, abrir el navegador e ir a 
+http://192.168.1.100:3000 y presionar [Comenzar]
 .
+![AutoFoto](https://github.com/user-attachments/assets/6a30d71d-62e5-457e-a31d-e65c260a359e)
