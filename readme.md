@@ -5,12 +5,6 @@ Funciona SIN https, debe ajustarse en el navegador para que funcione correctamen
 
 En chrome://flags/ buscar "Insecure content allowed" y activarla para la Ip del servidor donde está corriendo AutoFoto_ComputeVision
 
-Funciona sin https, debe ajustarse en el navegador para que funcione correctamente en chrome:
-
-chrome://flags/
-Y buscar "Insecure content allowed" y activarla para la Ip del servidor donde está corriendo AutoFoto
-Ejemplo: http://192.168.1.100:3000
-
 Para inicializar el proyecto:
 #####################################
 1. Instalar dependencias: npm install
