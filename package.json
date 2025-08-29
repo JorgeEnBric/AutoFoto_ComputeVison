@@ -1,0 +1,20 @@
+{
+  "name": "autofoto",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jorge Enrique Briceño",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "fs-extra": "^11.3.1",
+    "multer": "^2.0.2",
+    "@azure/cognitiveservices-computervision": "^8.2.0",
+    "@azure/ms-rest-js": "^2.7.0",
+    "dotenv": "^16.4.5"
+  }
+}
