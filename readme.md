@@ -18,3 +18,6 @@ El directorio de las fotos se encuentra en la carpeta "Galeria"
 Para subir una foto:
 1. En el celular, abrir el navegador e ir a 
 http://IPSuministrada:3000
+
+![AutoFoto](https://github.com/user-attachments/assets/7f43fe2d-60b6-4d75-be4f-d75121f44c7f)
+
