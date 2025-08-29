@@ -24,14 +24,38 @@ const port = 3000;
 // Utilidad para obtener la IP local sin depender de módulos externos
 function getLocalIP() {
     const nets = os.networkInterfaces();
+    const ifacePattern = process.env.PREFERRED_IFACE
+        ? new RegExp(process.env.PREFERRED_IFACE, 'i')
+        : null; // Permite seleccionar interfaz por nombre (regex)
+
+    const isAPIPA = ip => ip.startsWith('169.254.');
+    const badName = name => /virtualbox|vmware|vbox|hyper[- ]?v|hamachi|tailscale|docker|veth|loopback|br-|default switch/i.test(name);
+    const goodName = name => /wi[- ]?fi|wlan|wireless/i.test(name);
+
+    const candidates = [];
     for (const name of Object.keys(nets)) {
         for (const net of nets[name] || []) {
-            if (net && net.family === 'IPv4' && !net.internal) {
-                return net.address;
-            }
+            if (!net || net.family !== 'IPv4' || net.internal) continue;
+            if (isAPIPA(net.address)) continue; // evitar 169.254.x.x
+            const score =
+                (ifacePattern && ifacePattern.test(name) ? 1000 : 0) +
+                (goodName(name) ? 100 : 0) +
+                (badName(name) ? -1000 : 0);
+            candidates.push({ name, address: net.address, score });
         }
     }
-    return 'localhost';
+
+    if (candidates.length === 0) return 'localhost';
+
+    candidates.sort((a, b) => b.score - a.score);
+    const chosen = candidates[0];
+    const others = candidates.slice(1).map(c => `${c.address} (${c.name})`);
+    if (others.length) {
+        console.log(`IP elegida: ${chosen.address} (${chosen.name}). Otras: ${others.join(', ')}`);
+    } else {
+        console.log(`IP elegida: ${chosen.address} (${chosen.name})`);
+    }
+    return chosen.address;
 }
 
 // Función para guardar texto extraído
