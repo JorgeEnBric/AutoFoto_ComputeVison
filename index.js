@@ -130,8 +130,8 @@ app.get('/', (req, res) => {
 });
 
 // Iniciar el servidor
-app.listen(port, '0.0.0.0', () => {
-    console.log(`Servidor escuchando en http://0.0.0.0:${port}`);
+app.listen(port, require('ip').address(), () => { // Obtén la IP actual del servidor
+    console.log(`Servidor escuchando en http://${require('ip').address()}:${port}`);
     
     // Crear el directorio de galería si no existe
     const galeriaPath = path.join(__dirname, 'Galeria');
