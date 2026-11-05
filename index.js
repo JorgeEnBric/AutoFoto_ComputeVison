@@ -5,6 +5,9 @@ const path = require('path');
 const fs = require('fs-extra');
 const multer = require('multer');
 const os = require('os');
+const https = require('https');
+const http = require('http');
+const { ensureCertificate } = require('./cert');
 // Cargar variables de entorno desde azure.env
 require('dotenv').config({ path: path.join(__dirname, 'azure.env') });
 // Azure Computer Vision (Visual OCR)
@@ -20,7 +23,9 @@ const cvClient = new ComputerVisionClient(
     new ApiKeyCredentials({ inHeader: { 'Ocp-Apim-Subscription-Key': AZURE_VISION_KEY || '' } }),
     AZURE_VISION_ENDPOINT || ''
 );
-const port = 3000;
+const port = Number(process.env.PORT) || 3000;
+// Puerto HTTP que redirige a HTTPS (la cámara requiere HTTPS o localhost)
+const httpPort = Number(process.env.HTTP_PORT) || 3001;
 // Utilidad para obtener la IP local sin depender de módulos externos
 function getLocalIP() {
     const nets = os.networkInterfaces();
@@ -87,8 +92,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Middleware para servir archivos estáticos
-app.use(express.static(__dirname));
+// Archivos estáticos: solo lo necesario para la webapp.
+// No se sirve el directorio completo para no exponer azure.env ni el código del servidor.
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'componentes.html'));
+});
+app.get('/runapp.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'runapp.js'));
+});
+app.use('/Galeria', express.static(path.join(__dirname, 'Galeria')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -161,18 +173,46 @@ app.get('/obtener-fotos', (req, res) => {
     res.json({ fotos: getFotos() });
 });
 
-// Ruta principal para servir el HTML
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'componentes.html'));
-});
+// Ruta principal servida por el handler definido arriba (app.get('/')
 
-// Iniciar el servidor
-app.listen(port, '0.0.0.0', () => { // Escucha en todas las interfaces
-    const host = getLocalIP();
-    console.log(`Servidor escuchando en http://${host}:${port}`);
-    
-    // Crear el directorio de galería si no existe
+// IPs locales que se incluyen en el certificado TLS
+function getAllLocalIPs() {
+    const nets = os.networkInterfaces();
+    const ips = [];
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name] || []) {
+            if (!net || net.family !== 'IPv4' || net.internal) continue;
+            if (net.address.startsWith('169.254.')) continue;
+            ips.push(net.address);
+        }
+    }
+    return ips;
+}
+
+// Iniciar el servidor (HTTPS obligatorio para que funcione getUserMedia)
+async function start() {
     const galeriaPath = path.join(__dirname, 'Galeria');
-    fs.ensureDirSync(galeriaPath);
-    console.log(`Las fotos se guardarán en: ${galeriaPath}`);
+    await fs.ensureDir(galeriaPath);
+
+    const host = getLocalIP();
+    const tls = await ensureCertificate(getAllLocalIPs());
+
+    https.createServer(tls, app).listen(port, '0.0.0.0', () => {
+        console.log(`Servidor escuchando en https://${host}:${port}`);
+        console.log(`Las fotos se guardarán en: ${galeriaPath}`);
+        console.log('En el móvil: acepta el aviso de certificado (Avanzado > Continuar) y permite la cámara.');
+    });
+
+    http.createServer((req, res) => {
+        const reqHost = (req.headers.host || '').split(':')[0] || host;
+        res.writeHead(301, { Location: `https://${reqHost}:${port}${req.url || '/'}` });
+        res.end();
+    }).listen(httpPort, '0.0.0.0', () => {
+        console.log(`Redirección HTTP escuchando en http://${host}:${httpPort}`);
+    });
+}
+
+start().catch(error => {
+    console.error('No se pudo iniciar el servidor:', error);
+    process.exit(1);
 });

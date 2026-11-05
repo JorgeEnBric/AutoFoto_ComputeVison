@@ -1,5 +1,6 @@
 let photoCount = 0;
 let captureInterval;
+let firstCaptureTimeout;
 let stream = null;
 const startButton = document.getElementById('startButton');
 const stopButton = document.getElementById('stopButton');
@@ -58,11 +59,66 @@ function detenerCamara() {
         clearInterval(captureInterval);
         captureInterval = null;
     }
+    if (firstCaptureTimeout) {
+        clearTimeout(firstCaptureTimeout);
+        firstCaptureTimeout = null;
+    }
+    videoPreview.srcObject = null;
     
     videoContainer.style.display = 'none';
     startButton.style.display = 'block';
     stopButton.style.display = 'none';
     mostrarEstado('Cámara detenida');
+}
+
+// Mensaje legible según el tipo de error de cámara
+function mensajeErrorCamara(err) {
+    switch (err && err.name) {
+        case 'NotAllowedError':
+        case 'SecurityError':
+            return 'Permiso de cámara denegado. Habilítalo en el navegador y recarga.';
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+            return 'No se encontró ninguna cámara en el dispositivo.';
+        case 'NotReadableError':
+        case 'TrackStartError':
+            return 'La cámara está siendo usada por otra aplicación.';
+        case 'OverconstrainedError':
+        case 'ConstraintNotSatisfiedError':
+            return 'La cámara no admite la configuración solicitada.';
+        default:
+            return (err && err.message) || 'Error desconocido';
+    }
+}
+
+// Espera a que el video tenga dimensiones reales antes de capturar
+function esperarVideoListo(video, timeoutMs = 8000) {
+    if (video.videoWidth > 0) return Promise.resolve();
+
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('La cámara no entregó imagen'));
+        }, timeoutMs);
+
+        function onReady() {
+            if (video.videoWidth > 0) {
+                cleanup();
+                resolve();
+            }
+        }
+
+        function cleanup() {
+            clearTimeout(timer);
+            video.removeEventListener('loadedmetadata', onReady);
+            video.removeEventListener('playing', onReady);
+            video.removeEventListener('resize', onReady);
+        }
+
+        video.addEventListener('loadedmetadata', onReady);
+        video.addEventListener('playing', onReady);
+        video.addEventListener('resize', onReady);
+    });
 }
 
 // Función para rotar imagen 90 grados a la izquierda
@@ -84,6 +140,12 @@ function rotateImageLeft(canvas) {
 
 // Función para capturar foto
 async function capturePhoto() {
+    // Sin dimensiones válidas el canvas sería 0x0 y el servidor rechazaría la foto
+    if (!videoPreview.videoWidth || !videoPreview.videoHeight) {
+        console.warn('Video sin dimensiones todavía, se omite la captura');
+        return;
+    }
+
     // Crear canvas para la captura original
     const originalCanvas = document.createElement('canvas');
     originalCanvas.width = videoPreview.videoWidth;
@@ -110,14 +172,17 @@ async function capturePhoto() {
     
     // Guardar la foto en el servidor
     try {
-        rotatedCanvas.toBlob(async (blob) => {
-            const resultado = await guardarFoto(blob);
-            if (resultado.error) {
-                mostrarEstado('Error al guardar', true);
-            } else {
-                mostrarEstado('Foto guardada y rotada');
-            }
-        }, 'image/jpeg', 0.9);
+        const blob = await new Promise(resolve => {
+            rotatedCanvas.toBlob(resolve, 'image/jpeg', 0.9);
+        });
+        if (!blob) throw new Error('No se pudo generar la imagen');
+
+        const resultado = await guardarFoto(blob);
+        if (resultado.error) {
+            mostrarEstado('Error al guardar', true);
+        } else {
+            mostrarEstado('Foto guardada y rotada');
+        }
     } catch (error) {
         console.error('Error al guardar la foto:', error);
         mostrarEstado('Error al guardar', true);
@@ -126,41 +191,75 @@ async function capturePhoto() {
 
 // Iniciar cámara
 async function startCamera() {
+    // getUserMedia solo existe en contextos seguros (HTTPS o localhost)
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        console.error('Contexto no seguro: la cámara requiere HTTPS o localhost');
+        mostrarEstado('La cámara requiere HTTPS o localhost. Abre la dirección https:// del servidor.', true);
+        return;
+    }
+
     try {
-        // Solicitar acceso a la cámara trasera
-        const constraints = {
-            video: {
-                facingMode: { exact: 'environment' },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-            },
-            audio: false
+        const resolucion = {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
         };
-        
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        let mediaStream;
+        try {
+            // Solicitar acceso a la cámara trasera (ideal: no falla si no existe una exacta)
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' }, ...resolucion },
+                audio: false
+            });
+        } catch (err) {
+            if (err && err.name === 'OverconstrainedError') {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: resolucion,
+                    audio: false
+                });
+            } else {
+                throw err;
+            }
+        }
+
+        stream = mediaStream;
         
         // Configurar el elemento de video
         videoPreview.srcObject = stream;
-        videoPreview.play();
-        
-        // Mostrar el contenedor del video y ocultar el botón de inicio
         videoContainer.style.display = 'block';
         startButton.style.display = 'none';
         stopButton.style.display = 'block';
+        
+        await videoPreview.play().catch(() => {});
+        await esperarVideoListo(videoPreview);
         
         // Iniciar captura automática cada 8 segundos
         captureInterval = setInterval(capturePhoto, 8000);
         
         // Tomar primera foto después de 1 segundo
-        setTimeout(capturePhoto, 1000);
+        firstCaptureTimeout = setTimeout(capturePhoto, 1000);
         
         mostrarEstado('Cámara iniciada');
         
     } catch (err) {
         console.error('Error al acceder a la cámara:', err);
-        mostrarEstado('Error al acceder a la cámara: ' + err.message, true);
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        videoPreview.srcObject = null;
+        if (captureInterval) {
+            clearInterval(captureInterval);
+            captureInterval = null;
+        }
+        if (firstCaptureTimeout) {
+            clearTimeout(firstCaptureTimeout);
+            firstCaptureTimeout = null;
+        }
+        videoContainer.style.display = 'none';
         startButton.style.display = 'block';
         stopButton.style.display = 'none';
+        mostrarEstado('Error al acceder a la cámara: ' + mensajeErrorCamara(err), true);
     }
 }
 

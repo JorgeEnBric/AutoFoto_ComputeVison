@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Certificado TLS autofirmado (se regenera al iniciar)
+certs/
+Galeria/
 
 # Logs
 npm-debug.log*
